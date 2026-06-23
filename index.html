@@ -1,0 +1,1426 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ブラック占い館 | ミス・ノクターンの占い自動作文マシン</title>
+  <style>
+    /* =========================================================
+       ブラック占い館
+       - 1ファイル完結
+       - 外部API/外部画像/外部ライブラリ不使用
+       - 文章パーツは下部 JavaScript の FORTUNE_PARTS にまとめています
+       ========================================================= */
+
+    :root {
+      --ink: #2b1530;
+      --night: #160c22;
+      --night-2: #251235;
+      --purple: #5c2f72;
+      --wine: #8f3158;
+      --pink: #d98aaa;
+      --cream: #f6e6c9;
+      --paper: #f4dfbd;
+      --paper-2: #ead0a7;
+      --gold: #d7a45b;
+      --gold-dark: #8d6231;
+      --shadow: rgba(10, 5, 16, 0.45);
+      --soft-shadow: rgba(47, 19, 49, 0.22);
+      --radius: 18px;
+      --serif: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif JP", Georgia, serif;
+      --sans: "Hiragino Sans", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+      background: var(--night);
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--cream);
+      font-family: var(--sans);
+      background:
+        radial-gradient(circle at 80% 12%, rgba(217, 138, 170, 0.2) 0 10%, transparent 26%),
+        radial-gradient(circle at 18% 20%, rgba(215, 164, 91, 0.13) 0 7%, transparent 24%),
+        linear-gradient(120deg, rgba(26, 11, 35, 0.55), rgba(69, 25, 56, 0.28)),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 92px),
+        linear-gradient(180deg, #130b20 0%, #2a1237 58%, #160c22 100%);
+      overflow-x: hidden;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::before {
+      background-image:
+        radial-gradient(circle, rgba(255, 226, 170, 0.9) 0 1px, transparent 2px),
+        radial-gradient(circle, rgba(217, 138, 170, 0.7) 0 1px, transparent 2px);
+      background-size: 93px 89px, 141px 137px;
+      background-position: 12px 18px, 71px 42px;
+      opacity: 0.5;
+      animation: starDrift 16s linear infinite;
+    }
+
+    body::after {
+      background:
+        radial-gradient(ellipse at top left, rgba(0,0,0,0.38), transparent 38%),
+        radial-gradient(ellipse at bottom right, rgba(0,0,0,0.42), transparent 42%);
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      width: min(1180px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 28px 0 46px;
+    }
+
+    .curtain {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      width: min(12vw, 130px);
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.72;
+      filter: drop-shadow(0 14px 20px rgba(0,0,0,0.36));
+    }
+
+    .curtain.left {
+      left: 0;
+      background:
+        radial-gradient(circle at 80% 14%, rgba(246, 205, 141, 0.18), transparent 16%),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0 7px, transparent 7px 20px),
+        linear-gradient(100deg, #441735 0%, #7c2d57 62%, transparent 100%);
+      clip-path: polygon(0 0, 100% 0, 72% 100%, 0 100%);
+    }
+
+    .curtain.right {
+      right: 0;
+      background:
+        radial-gradient(circle at 22% 18%, rgba(246, 205, 141, 0.16), transparent 16%),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.035) 0 7px, transparent 7px 20px),
+        linear-gradient(260deg, #441735 0%, #7c2d57 62%, transparent 100%);
+      clip-path: polygon(0 0, 100% 0, 100% 100%, 28% 100%);
+    }
+
+    .site-header {
+      margin-bottom: 18px;
+      text-align: center;
+    }
+
+    .brand-kicker {
+      color: var(--gold);
+      font-family: var(--serif);
+      font-size: clamp(15px, 2vw, 20px);
+      letter-spacing: 0;
+      text-shadow: 0 2px 0 rgba(0,0,0,0.25);
+    }
+
+    h1 {
+      margin: 4px 0 0;
+      font-family: var(--serif);
+      font-size: clamp(36px, 7vw, 72px);
+      line-height: 1.02;
+      letter-spacing: 0;
+      color: #ffd997;
+      text-shadow: 0 4px 0 rgba(96, 35, 66, 0.75), 0 0 22px rgba(236, 170, 92, 0.25);
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: minmax(320px, 470px) 1fr;
+      gap: 24px;
+      align-items: stretch;
+    }
+
+    .paper-panel,
+    .result-score,
+    .fortune-card,
+    .summary-card {
+      color: var(--ink);
+      border-radius: var(--radius);
+      border: 2px solid var(--gold-dark);
+      background:
+        radial-gradient(circle at 12% 18%, rgba(255,255,255,0.48), transparent 24%),
+        radial-gradient(circle at 90% 82%, rgba(141, 98, 49, 0.12), transparent 28%),
+        repeating-linear-gradient(45deg, rgba(111, 72, 35, 0.025) 0 2px, transparent 2px 9px),
+        linear-gradient(135deg, var(--paper), #f8e9ca 48%, var(--paper-2));
+      box-shadow:
+        0 22px 40px var(--shadow),
+        inset 0 0 0 4px rgba(255, 244, 220, 0.45),
+        inset 0 0 0 7px rgba(139, 95, 43, 0.16);
+    }
+
+    .paper-panel {
+      padding: 24px;
+      min-height: 100%;
+      position: relative;
+    }
+
+    .paper-panel::before,
+    .paper-panel::after,
+    .fortune-card::before,
+    .fortune-card::after,
+    .summary-card::before,
+    .summary-card::after {
+      content: "✦";
+      position: absolute;
+      color: rgba(141, 98, 49, 0.42);
+      font-size: 20px;
+    }
+
+    .paper-panel::before,
+    .fortune-card::before,
+    .summary-card::before {
+      top: 12px;
+      left: 14px;
+    }
+
+    .paper-panel::after,
+    .fortune-card::after,
+    .summary-card::after {
+      right: 14px;
+      bottom: 12px;
+    }
+
+    .paper-panel h2,
+    .results h2 {
+      margin: 0;
+      font-family: var(--serif);
+      text-align: center;
+      color: #5a253b;
+      letter-spacing: 0;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 17px;
+      margin-top: 24px;
+    }
+
+    .field {
+      display: grid;
+      grid-template-columns: 88px 1fr;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .field label,
+    .choice-label {
+      color: #4b2432;
+      font-weight: 700;
+    }
+
+    input[type="number"],
+    select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid rgba(89, 41, 51, 0.28);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: #3b1d28;
+      background: rgba(255, 249, 236, 0.72);
+      box-shadow: inset 0 2px 4px rgba(60, 31, 36, 0.08);
+      outline: none;
+    }
+
+    input[type="number"]:focus,
+    select:focus {
+      border-color: var(--wine);
+      box-shadow: 0 0 0 4px rgba(143, 49, 88, 0.18);
+    }
+
+    .choice-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .choice-row input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .choice-row span {
+      display: inline-grid;
+      min-height: 38px;
+      place-items: center;
+      padding: 8px 13px;
+      border: 1px solid rgba(89, 41, 51, 0.28);
+      border-radius: 8px;
+      color: #5a2739;
+      background: rgba(255, 249, 236, 0.52);
+      cursor: pointer;
+      transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+    }
+
+    .choice-row input:checked + span {
+      color: #fff5dc;
+      background: linear-gradient(135deg, var(--wine), var(--purple));
+      border-color: rgba(255, 226, 173, 0.8);
+      box-shadow: 0 6px 14px rgba(94, 45, 92, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .error-message {
+      min-height: 22px;
+      color: #852442;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .primary-button,
+    .again-button {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 56px;
+      border: 1px solid rgba(255, 226, 173, 0.86);
+      border-radius: 12px;
+      color: #fff6da;
+      background:
+        linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent) -120% 0 / 70% 100% no-repeat,
+        linear-gradient(135deg, #88335a, #5c2d73 58%, #9b3e66);
+      box-shadow: 0 12px 0 #6c2f47, 0 18px 28px rgba(47, 19, 49, 0.32);
+      cursor: pointer;
+      font-weight: 800;
+      letter-spacing: 0;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background-position 0.7s ease;
+    }
+
+    .primary-button:hover,
+    .again-button:hover {
+      background-position: 180% 0;
+      transform: translateY(-2px);
+      box-shadow: 0 14px 0 #6c2f47, 0 22px 32px rgba(47, 19, 49, 0.36);
+    }
+
+    .primary-button:active,
+    .again-button:active {
+      transform: translateY(4px);
+      box-shadow: 0 6px 0 #6c2f47, 0 12px 18px rgba(47, 19, 49, 0.28);
+    }
+
+    .stage {
+      min-height: 580px;
+      position: relative;
+      border: 1px solid rgba(215, 164, 91, 0.55);
+      border-radius: 24px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 48% 37%, rgba(159, 69, 163, 0.24), transparent 25%),
+        radial-gradient(circle at 63% 18%, rgba(238, 204, 139, 0.16), transparent 18%),
+        linear-gradient(160deg, rgba(20, 9, 31, 0.72), rgba(62, 25, 65, 0.66));
+      box-shadow: 0 24px 46px rgba(0,0,0,0.34), inset 0 0 0 1px rgba(255,255,255,0.04);
+    }
+
+    .moon {
+      position: absolute;
+      top: 38px;
+      right: 17%;
+      width: 134px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: #ead0a7;
+      opacity: 0.34;
+      box-shadow: 0 0 45px rgba(255, 223, 166, 0.18);
+    }
+
+    .moon::after {
+      content: "";
+      position: absolute;
+      inset: -4px 20px -4px -18px;
+      border-radius: 50%;
+      background: #1e112c;
+    }
+
+    .shelf {
+      position: absolute;
+      left: 34px;
+      right: 34px;
+      bottom: 38px;
+      height: 26px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(0,0,0,0.38), transparent 68%);
+    }
+
+    .speech {
+      position: absolute;
+      left: 36px;
+      top: 50px;
+      width: min(260px, 42%);
+      padding: 18px 18px 20px;
+      border-radius: 50% 48% 52% 45%;
+      color: #512236;
+      background: #f8e9d0;
+      box-shadow: 0 10px 18px rgba(0,0,0,0.22);
+      font-weight: 800;
+      line-height: 1.7;
+      z-index: 4;
+    }
+
+    .speech::after {
+      content: "";
+      position: absolute;
+      right: -14px;
+      bottom: 18px;
+      width: 30px;
+      height: 26px;
+      background: #f8e9d0;
+      clip-path: polygon(0 0, 100% 46%, 0 100%);
+    }
+
+    .hero-visual {
+      position: absolute;
+      right: clamp(8px, 4vw, 46px);
+      bottom: 0;
+      width: min(620px, 86%);
+      z-index: 2;
+      filter: drop-shadow(0 22px 34px rgba(0,0,0,0.42));
+      transform-origin: center bottom;
+      animation: floaty 4.5s ease-in-out infinite;
+    }
+
+    .fortune-image {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 610px;
+      object-fit: contain;
+      object-position: center bottom;
+    }
+
+    .status-badge {
+      position: absolute;
+      left: clamp(22px, 7vw, 72px);
+      bottom: 58px;
+      z-index: 5;
+      min-width: 128px;
+      padding: 13px 18px;
+      border: 1px solid rgba(255, 223, 167, 0.72);
+      border-radius: 999px;
+      color: #fff3d0;
+      background:
+        radial-gradient(circle at 18% 20%, rgba(255,255,255,0.34), transparent 20%),
+        linear-gradient(135deg, rgba(132, 53, 132, 0.82), rgba(53, 22, 74, 0.88));
+      box-shadow: 0 0 30px rgba(214, 89, 207, 0.42), inset 0 0 18px rgba(255,255,255,0.11);
+      font-weight: 900;
+      text-align: center;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.42);
+    }
+
+    .stage.is-reading .status-badge {
+      animation: statusPulse 0.9s ease-in-out infinite;
+    }
+
+    .sparkles {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 20;
+    }
+
+    .spark {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      color: #ffd98d;
+      animation: sparklePop 900ms ease-out forwards;
+      text-shadow: 0 0 12px rgba(217,138,170,0.8);
+    }
+
+    .results {
+      margin-top: 26px;
+    }
+
+    .results[hidden] {
+      display: none;
+    }
+
+    .results-title {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      color: #ffd997;
+      font-family: var(--serif);
+      font-size: clamp(28px, 5vw, 44px);
+      text-shadow: 0 3px 0 rgba(96, 35, 66, 0.7);
+      margin: 10px 0 22px;
+    }
+
+    .results-title::before,
+    .results-title::after {
+      content: "";
+      width: min(140px, 18vw);
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    }
+
+    .results-layout {
+      display: grid;
+      grid-template-columns: 210px 1fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .result-score {
+      position: relative;
+      min-height: 220px;
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      padding: 18px 14px;
+      text-align: center;
+    }
+
+    .score-caption {
+      color: #5a253b;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .score-value {
+      font-family: Georgia, var(--serif);
+      color: #48203a;
+      font-size: 48px;
+      line-height: 1;
+      font-weight: 900;
+    }
+
+    .score-value small {
+      color: #6d3c51;
+      font-size: 20px;
+    }
+
+    .score-label {
+      margin: 14px 0 8px;
+      min-width: 118px;
+      padding: 6px 14px;
+      color: #fff3dc;
+      background: linear-gradient(135deg, #6e2d4b, #a54367);
+      border: 1px solid rgba(255, 223, 167, 0.7);
+      border-radius: 6px;
+      box-shadow: 0 5px 0 rgba(87, 42, 57, 0.35);
+      font-weight: 900;
+      font-size: 20px;
+    }
+
+    .score-note {
+      color: #61384a;
+      font-weight: 700;
+      line-height: 1.7;
+      font-size: 13px;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .fortune-card,
+    .summary-card {
+      position: relative;
+      min-height: 186px;
+      padding: 20px;
+      overflow: hidden;
+      transform-origin: center top;
+      animation: cardFlip 520ms ease both;
+    }
+
+    .fortune-card:nth-child(2n) {
+      animation-delay: 80ms;
+    }
+
+    .fortune-card:nth-child(3n) {
+      animation-delay: 140ms;
+    }
+
+    .fortune-card h3,
+    .summary-card h3 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 12px;
+      padding-bottom: 9px;
+      color: #4f2137;
+      font-family: var(--serif);
+      font-size: 24px;
+      border-bottom: 1px solid rgba(95, 47, 61, 0.2);
+    }
+
+    .card-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: rgba(143, 49, 88, 0.12);
+      border: 1px solid rgba(141, 98, 49, 0.32);
+      font-size: 20px;
+    }
+
+    .fortune-card p,
+    .summary-card p {
+      margin: 0;
+      color: #35202a;
+      line-height: 1.85;
+      font-weight: 650;
+    }
+
+    .luck-stars {
+      display: flex;
+      gap: 3px;
+      margin-top: 15px;
+      color: #6b3157;
+      font-size: 16px;
+    }
+
+    .luck-stars .dim {
+      color: rgba(83, 42, 61, 0.28);
+    }
+
+    .wide-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .summary-card {
+      margin-top: 16px;
+      min-height: 132px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .summary-card .again-button {
+      width: auto;
+      min-width: 190px;
+      padding-inline: 24px;
+    }
+
+    .share-note {
+      margin-top: 14px;
+      color: #e5c692;
+      text-align: center;
+      font-size: 13px;
+      opacity: 0.86;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+    }
+
+    @keyframes starDrift {
+      from { background-position: 12px 18px, 71px 42px; }
+      to { background-position: 105px 107px, 212px 179px; }
+    }
+
+    @keyframes floaty {
+      0%, 100% { transform: translateY(0) rotate(-0.4deg); }
+      50% { transform: translateY(-8px) rotate(0.5deg); }
+    }
+
+    @keyframes statusPulse {
+      0%, 100% { box-shadow: 0 0 30px rgba(214, 89, 207, 0.42), inset 0 0 18px rgba(255,255,255,0.11); }
+      50% { box-shadow: 0 0 64px rgba(255, 210, 130, 0.62), 0 0 98px rgba(218, 91, 209, 0.35), inset 0 0 20px rgba(255,255,255,0.18); }
+    }
+
+    @keyframes sparklePop {
+      0% { transform: translateY(0) scale(0.35) rotate(0deg); opacity: 0; }
+      18% { opacity: 1; }
+      100% { transform: translateY(-86px) scale(1.25) rotate(160deg); opacity: 0; }
+    }
+
+    @keyframes cardFlip {
+      from { opacity: 0; transform: rotateX(-14deg) translateY(18px); }
+      to { opacity: 1; transform: rotateX(0deg) translateY(0); }
+    }
+
+    @media (max-width: 920px) {
+      .site-header {
+        grid-template-columns: 1fr;
+      }
+
+      .shell {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .stage {
+        order: 1;
+        min-height: 620px;
+      }
+
+      .paper-panel {
+        order: 2;
+      }
+
+      .hero-visual {
+        right: 50%;
+        width: min(500px, 92%);
+        transform: translateX(50%);
+      }
+
+      .speech {
+        width: min(270px, 48%);
+      }
+
+      .results-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .result-score {
+        min-height: auto;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        width: min(100% - 20px, 520px);
+        padding-top: 20px;
+      }
+
+      .curtain {
+        width: 34px;
+        opacity: 0.5;
+      }
+
+      .brand-kicker,
+      h1 {
+        text-align: center;
+      }
+
+      .stage {
+        min-height: 560px;
+        border-radius: 18px;
+      }
+
+      .speech {
+        left: 18px;
+        top: 22px;
+        width: 64%;
+        padding: 14px 15px;
+        font-size: 13px;
+      }
+
+      .hero-visual {
+        width: min(440px, 96%);
+      }
+
+      .fortune-image {
+        max-height: 500px;
+      }
+
+      .status-badge {
+        left: 18px;
+        bottom: 30px;
+      }
+
+      .paper-panel {
+        padding: 21px 16px;
+      }
+
+      .field {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .choice-row span {
+        flex: 1 1 auto;
+        min-width: 66px;
+      }
+
+      .cards-grid,
+      .wide-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-card {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-card .again-button {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .stage {
+        min-height: 500px;
+      }
+
+      .speech {
+        width: 74%;
+      }
+
+      .fortune-image {
+        max-height: 450px;
+      }
+
+      .fortune-card h3,
+      .summary-card h3 {
+        font-size: 21px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="curtain left" aria-hidden="true"></div>
+  <div class="curtain right" aria-hidden="true"></div>
+  <div class="sparkles" id="sparkles" aria-hidden="true"></div>
+
+  <main class="page">
+    <header class="site-header">
+      <div>
+        <div class="brand-kicker">いつも予約でいっぱい</div>
+        <h1>ブラック占い館</h1>
+      </div>
+    </header>
+
+    <section class="shell" aria-label="占い入力">
+      <form class="paper-panel" id="fortuneForm" novalidate>
+        <h2>あなたの情報を教えてね</h2>
+        <div class="form-grid">
+          <div class="field">
+            <label for="age">年齢</label>
+            <div>
+              <input id="age" name="age" type="number" min="1" max="120" inputmode="numeric" placeholder="28" required>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="choice-label">性別</div>
+            <div class="choice-row" role="radiogroup" aria-label="性別">
+              <label><input type="radio" name="gender" value="女性" checked><span>女性</span></label>
+              <label><input type="radio" name="gender" value="男性"><span>男性</span></label>
+              <label><input type="radio" name="gender" value="その他"><span>その他</span></label>
+              <label><input type="radio" name="gender" value="秘密"><span>秘密♡</span></label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="zodiac">星座</label>
+            <select id="zodiac" name="zodiac" required>
+              <option value="">選んでね</option>
+              <option value="牡羊座">牡羊座</option>
+              <option value="牡牛座">牡牛座</option>
+              <option value="双子座">双子座</option>
+              <option value="蟹座">蟹座</option>
+              <option value="獅子座">獅子座</option>
+              <option value="乙女座">乙女座</option>
+              <option value="天秤座">天秤座</option>
+              <option value="蠍座">蠍座</option>
+              <option value="射手座">射手座</option>
+              <option value="山羊座">山羊座</option>
+              <option value="水瓶座">水瓶座</option>
+              <option value="魚座">魚座</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <div class="choice-label">血液型</div>
+            <div class="choice-row" role="radiogroup" aria-label="血液型">
+              <label><input type="radio" name="blood" value="A" checked><span>A型</span></label>
+              <label><input type="radio" name="blood" value="B"><span>B型</span></label>
+              <label><input type="radio" name="blood" value="O"><span>O型</span></label>
+              <label><input type="radio" name="blood" value="AB"><span>AB型</span></label>
+              <label><input type="radio" name="blood" value="不明"><span>不明</span></label>
+            </div>
+          </div>
+
+          <p class="error-message" id="errorMessage" aria-live="polite"></p>
+          <button class="primary-button" type="submit">今日の運勢を占う <span aria-hidden="true">🔮</span></button>
+        </div>
+      </form>
+
+      <section class="stage" id="stage" aria-label="ミス・ノクターン">
+        <div class="moon" aria-hidden="true"></div>
+        <div class="speech" id="speech">フフッ……あなたの運命、見せてもらうわ。逃げてもムダだけどね</div>
+        <div class="hero-visual" aria-hidden="true">
+          <img class="fortune-image" src="assets/fortune-girl.png" alt="">
+        </div>
+        <div class="status-badge" id="statusBadge" aria-hidden="true">占い中…</div>
+        <div class="shelf" aria-hidden="true"></div>
+      </section>
+    </section>
+
+    <section class="results" id="results" hidden aria-live="polite">
+      <div class="results-title">本日の運勢</div>
+      <div class="results-layout">
+        <aside class="result-score">
+          <div class="score-caption">今日の運勢スコア</div>
+          <div class="score-value"><span id="scoreValue">62</span><small>/100</small></div>
+          <div class="score-label" id="scoreLabel">中吉</div>
+          <div class="score-note" id="scoreNote">ほどほどね。油断しなければ、なんとかなるわ。</div>
+        </aside>
+        <div class="cards-grid" id="mainCards"></div>
+      </div>
+      <div class="wide-grid" id="actionCards"></div>
+      <article class="summary-card">
+        <div>
+          <h3><span class="card-icon">🔮</span>総評</h3>
+          <p id="summaryText"></p>
+        </div>
+        <button class="again-button" type="button" id="againButton">もう一度占う <span aria-hidden="true">🔮</span></button>
+      </article>
+      <p class="share-note">今日の運勢は、明日のあなたが「そんな日もあった」と言うための下書きです。</p>
+    </section>
+  </main>
+
+  <script>
+    "use strict";
+
+    /* =========================================================
+       キャラクター設定
+       セリフや表情差分はここを編集します。
+       ========================================================= */
+    const NOCTURNE = {
+      name: "ミス・ノクターン",
+      expressions: ["smirk", "wink", "think", "pout", "happy", "serious"],
+      lines: {
+        idle: "フフッ……あなたの運命、見せてもらうわ。逃げてもムダだけどね",
+        reading: "水晶玉が曇ってるわね……たぶん寝不足か、未返信のメールのせいよ",
+        result: "出たわ。いい結果かどうかは、あなたの受け取り方しだいね",
+        bad: "大丈夫。底が見えたということは、あとは床材を選ぶだけよ",
+        good: "今日は珍しく追い風ね。油断すると追い風で書類が飛ぶけど"
+      }
+    };
+
+    /* =========================================================
+       占い文章パーツ
+       文言を増やしたい場合は、この FORTUNE_PARTS の各配列に
+       { text: "文章", tags: ["タグ"] } の形で追加します。
+
+       タグ例：
+       age-young / age-middle / age-senior
+       fire / earth / air / water
+       blood-a / blood-b / blood-o / blood-ab / blood-unknown
+       calm / chaos / money / love / work
+       ========================================================= */
+    const FORTUNE_PARTS = {
+      overall: [
+        { text: "今日の総合運は、冷蔵庫の奥から発見された賞味期限ギリギリのプリンくらい微妙です。食べられなくはないけれど、人にすすめるほどではありません。", tags: ["calm", "earth"] },
+        { text: "朝の支度中に靴下の左右が微妙に違うと気づくような日。気づいた時点で勝ち、直すかどうかは文化です。", tags: ["air", "age-middle"] },
+        { text: "運気は古い商店街のガラガラ抽選機くらい渋め。白い玉でも、ティッシュが増えるなら生活は少し助かります。", tags: ["calm", "blood-a"] },
+        { text: "今日は星があなたを見ています。見ているだけです。上司と同じで、手伝う気配はありません。", tags: ["work", "chaos"] },
+        { text: "全体的には、傘を持って出た日に雨が降らないタイプの運勢。損したようで、濡れないだけ勝ちです。", tags: ["water", "calm"] },
+        { text: "小さな違和感が大きな転機に見える日。ただし半分は単なる空腹なので、神託の前に何か食べましょう。", tags: ["fire", "age-young"] },
+        { text: "運命の歯車は回っていますが、少し油切れです。ギイギイ鳴る音をBGMだと思えば、意外とドラマチック。", tags: ["earth", "blood-o"] },
+        { text: "今日は妙に勘が冴えます。ただし冴えすぎて、どうでもいい違和感まで拾います。通知音に深読みしないで。", tags: ["water", "blood-ab"] },
+        { text: "運勢は中古の魔法じゅうたんくらい。飛べますが、たまに低空飛行で現実の段差に当たります。", tags: ["air", "chaos"] },
+        { text: "いつもより少しだけ運が味方します。味方と言っても、会議で隣に座る程度の距離感です。", tags: ["work", "calm"] },
+        { text: "今日は『まあ、最悪ではない』が金色に輝く日。謙虚な幸福は、だいたいコンビニの袋に入っています。", tags: ["earth", "calm"] },
+        { text: "水晶玉には、あなたが丁寧に頑張る姿が映っています。背景には未処理の用事が山脈のようにそびえています。", tags: ["blood-a", "age-middle"] },
+        { text: "運命はあなたに小さな余白を渡しています。そこに希望を書くか、買い物メモを書くかは自由です。", tags: ["air", "calm"] },
+        { text: "今日は予定通りにいかないことが、逆に予定通りです。矛盾を抱えたまま歩く姿、かなり占いっぽいです。", tags: ["chaos", "fire"] },
+        { text: "全体運は、古いゲーム機を一発で起動できた時くらいの吉。期待しすぎると接触不良になります。", tags: ["age-senior", "calm"] },
+        { text: "あなたの周りに小さな追い風が吹いています。紙類と髪型だけは守ってください。", tags: ["air", "blood-b"] },
+        { text: "今日は人間関係の湿度が高めです。心の除湿機を弱でつけて、余計な一言を乾かしましょう。", tags: ["water", "calm"] },
+        { text: "幸運は来ていますが、インターホンを押さずに玄関前で迷っています。気配だけでもありがたいと思いましょう。", tags: ["blood-unknown", "calm"] },
+        { text: "運勢はやや上向き。エレベーターで言えば、目的階のひとつ手前で止まるくらいの上向きです。", tags: ["earth", "work"] },
+        { text: "今日のあなたは、やればできる雰囲気をまとっています。問題は、やるまでの儀式が長いことです。", tags: ["fire", "age-young"] },
+        { text: "星々が『落ち着いて』と囁いています。星にまで心配されるのは少し不本意ですが、聞く価値はあります。", tags: ["water", "calm"] },
+        { text: "総合運は、開けた引き出しに探し物がなかった時くらい。別の引き出しには希望があります。たぶん。", tags: ["blood-o", "calm"] },
+        { text: "運命の女神がこちらを見てニヤッとしました。親切なのか伏線なのかは、夕方まで保留です。", tags: ["chaos", "fire"] },
+        { text: "今日は過去の自分が置いた小さな罠に気づく日。パスワード、期限、冷蔵庫の奥に注意です。", tags: ["age-middle", "work"] },
+        { text: "あなたの運気は薄い雲の向こうで光っています。つまり見えにくいけれど、消えてはいません。", tags: ["air", "calm"] },
+        { text: "日常の小さなズレが笑いに変わる日。笑えない時は、あとで笑うための領収書として保管しましょう。", tags: ["blood-ab", "calm"] },
+        { text: "今日は慎重に進めば吉。勢いだけで走ると、魔法陣の外周をぐるぐる回るだけになります。", tags: ["earth", "blood-a"] },
+        { text: "総合運は悪くありません。ただし幸運が照れているので、こちらから少し迎えに行く必要があります。", tags: ["love", "calm"] }
+      ],
+      work: [
+        { text: "仕事運は、会議を減らそうとして会議が増えるタイプの運勢です。今日は“気を利かせる”より“静かに存在する”方が吉。", tags: ["work", "calm"] },
+        { text: "返信を急ぐほど誤字が混ざる気配。送信前に一呼吸置けば、未来の自分から感謝状が届きます。", tags: ["work", "blood-a"] },
+        { text: "頼まれごとがふわっと増えそう。全部抱えると社内の便利な棚になるので、棚卸しの心を忘れずに。", tags: ["work", "age-middle"] },
+        { text: "資料作成は進みますが、なぜか表の罫線に魂を吸われます。完璧な罫線より提出が偉い日です。", tags: ["work", "earth"] },
+        { text: "今日は『確認します』という魔法の言葉が効きます。乱用すると確認だけで一日が沈みます。", tags: ["work", "blood-unknown"] },
+        { text: "周囲の雑音に巻き込まれやすい日。イヤホンが使えるなら、社会性を少しだけミュートしましょう。", tags: ["work", "air"] },
+        { text: "上司や先輩の機嫌を読むより、タスクの締切を読みましょう。星もそこを強く指差しています。", tags: ["work", "age-young"] },
+        { text: "やる気は遅刻して到着します。先に手だけ動かしておくと、あとから心が追いつきます。", tags: ["work", "calm"] },
+        { text: "細かいミスを拾える日。ただし拾いすぎると心のポケットがパンパンになります。優先順位に愛を。", tags: ["work", "blood-a"] },
+        { text: "ひらめき運あり。突然の案はメモしましょう。脳内保存は、古い共有フォルダより信用できません。", tags: ["work", "air", "blood-b"] },
+        { text: "仕事場の空気はやや湿り気味。余計な一言を乾燥剤に包んで、今日は机の引き出しにしまって。", tags: ["work", "water"] },
+        { text: "タスクが横から増えます。『今やること』『後で呪うこと』に分けると見通しがよくなります。", tags: ["work", "chaos"] },
+        { text: "連絡運はまずまず。短く、明るく、逃げ道を残して書くと、メールが小さな橋になります。", tags: ["work", "air"] },
+        { text: "今日は目立つ成果より、地味な修正が効く日。誰にも拍手されませんが、未来の事故がひとつ減ります。", tags: ["work", "earth"] },
+        { text: "集中力が途切れやすい気配。25分だけ頑張ると、脳が『だまされた』と気づく前に進みます。", tags: ["work", "age-young"] },
+        { text: "交渉運はそこそこ。強く出るより、相手の逃げ道を作る方が結果的に勝ちやすいです。", tags: ["work", "fire"] },
+        { text: "今日は裏方作業にツキがあります。舞台袖で魔法陣を直すような、渋い貢献が光ります。", tags: ["work", "blood-o"] },
+        { text: "職場の『なんとなく不穏』を察知しそう。深入りせず、避難経路だけ確認するのが大人の占術です。", tags: ["work", "water", "blood-ab"] },
+        { text: "古いタスクが化石のように発掘される暗示。見つかっただけで半分勝ち。残り半分は今日のあなた次第。", tags: ["work", "age-middle"] },
+        { text: "仕事運は小吉。大きく跳ねるより、机の上から謎の紙を一枚減らす方が開運になります。", tags: ["work", "calm"] },
+        { text: "勢いで返事をすると予定が増えます。『確認して折り返します』で運命に待機列を作りましょう。", tags: ["work", "fire"] },
+        { text: "今日は説明が通りやすい日。たとえ話は短めに。長いと会議室に霧が出ます。", tags: ["work", "air"] },
+        { text: "小さな親切が評価されそう。ただし無限に便利な人になる前に、店じまいの札を出して。", tags: ["work", "water"] },
+        { text: "作業の順番を変えると詰まりがほどけます。いつもの道に小石がある日は、横道も占いです。", tags: ["work", "blood-o"] },
+        { text: "今日は『後でやる』が増殖します。見つけたら早めに捕獲して、短い作業に分解しましょう。", tags: ["work", "earth"] },
+        { text: "仕事運はやや強め。褒められても油断禁物。褒め言葉の後ろに追加タスクが隠れていることがあります。", tags: ["work", "fire"] }
+      ],
+      love: [
+        { text: "恋愛運は、LINEの返信を考えすぎて、最終的に天気の話を送るような運勢です。悪くはありません。無害です。", tags: ["love", "air"] },
+        { text: "距離感の調整が吉。近づきすぎると湯気で前が見えず、離れすぎると通知が迷子になります。", tags: ["love", "water"] },
+        { text: "今日は優しさが伝わりやすい日。ただし長文にすると、相手の読解力を試す試験になります。", tags: ["love", "blood-a"] },
+        { text: "ときめきは小さめですが、安定感があります。古い喫茶店の椅子くらい、少しきしむけれど座れます。", tags: ["love", "earth"] },
+        { text: "相手の反応を読みすぎると、水晶玉よりスマホ画面を見つめる時間が増えます。ほどほどに。", tags: ["love", "age-young"] },
+        { text: "気になる人には軽い一言が効きます。重い一言は、魔法ではなく荷物です。", tags: ["love", "air"] },
+        { text: "今日は笑いの相性が光ります。自虐は小さじ一杯まで。入れすぎるとスープが黒くなります。", tags: ["love", "calm"] },
+        { text: "恋愛運は中くらい。ドラマチックな展開より、相手の好きな飲み物を覚える方が強い魔法です。", tags: ["love", "water"] },
+        { text: "過去のやり取りを掘り返すと、懐かしさと謎の羞恥が出土します。発掘はほどほどに。", tags: ["love", "age-middle"] },
+        { text: "今日は聞き役にツキ。相手の話を最後まで聞くと、心の猫が少し近づいてきます。", tags: ["love", "blood-o"] },
+        { text: "好きな人の前で完璧を演じるより、ほどよく人間でいる方が魅力的。魔女も寝癖はあります。", tags: ["love", "calm"] },
+        { text: "連絡運は気まぐれ。返信が遅くても世界は終わりません。終わるのはあなたの脳内裁判だけです。", tags: ["love", "blood-ab"] },
+        { text: "今日の恋愛は、甘いけれど少し焦げたクッキー。焦げた部分を笑える相手なら、かなり吉です。", tags: ["love", "fire"] },
+        { text: "気持ちを言葉にするなら短く。詩集のように送ると、相手が栞を探し始めます。", tags: ["love", "air"] },
+        { text: "ひとり時間にもツキがあります。誰かに好かれる前に、自分の機嫌を少しなだめておきましょう。", tags: ["love", "blood-unknown"] },
+        { text: "今日は褒め言葉が効きます。具体的に褒めると吉。『なんか良い』も悪くないけれど、やや煙です。", tags: ["love", "earth"] },
+        { text: "関係性に小さな追い風。押しすぎず、引きすぎず、ドアを半開きにするくらいがちょうどいいです。", tags: ["love", "calm"] },
+        { text: "恋愛運は軽やか。深刻な話は夕方以降に。昼のテンションで人生会議を開くと議事録が荒れます。", tags: ["love", "fire"] },
+        { text: "今日は懐かしい人を思い出すかも。連絡するなら期待を少なめに、礼儀を多めに。", tags: ["love", "age-senior"] },
+        { text: "魅力は出ています。ただし自分で気づきにくいタイプの光なので、照明係の星を信じましょう。", tags: ["love", "water"] },
+        { text: "やきもき運あり。相手の既読より、自分の夕飯を優先した方が結果的に美しく見えます。", tags: ["love", "age-young"] },
+        { text: "今日は軽い誘いが吉。大げさな演出より、『ついでに』くらいの温度が心地よいです。", tags: ["love", "blood-b"] },
+        { text: "言いにくいことは柔らかい言葉で。真実は刃物ではなく、よく研いだバターナイフで十分です。", tags: ["love", "blood-a"] },
+        { text: "恋愛運は穏やか。大事件は起きにくいけれど、平和も立派なイベントです。", tags: ["love", "calm"] },
+        { text: "誰かの優しさに気づける日。ただし裏読みしすぎると、優しさが領収書に見えてきます。", tags: ["love", "water"] },
+        { text: "今日は目が合う運あり。見つめすぎると占い師の尋問になるので、二秒くらいで戻ってきて。", tags: ["love", "fire"] }
+      ],
+      money: [
+        { text: "金運は、財布の中身よりもサブスクの自動更新の方が元気です。使っていないサービスがないか、心の棚卸しをしましょう。", tags: ["money", "age-middle"] },
+        { text: "小さな出費が忍び寄ります。コンビニの新商品は、あなたの意志ではなく照明の勝利です。", tags: ["money", "fire"] },
+        { text: "今日は買う前に一晩寝かせると吉。欲望も冷蔵保存すると、だいたい半分くらい縮みます。", tags: ["money", "earth"] },
+        { text: "お得情報に心が揺れますが、必要ないものが安いだけなら、それは安い呪いです。", tags: ["money", "blood-a"] },
+        { text: "金運は堅実。派手な収穫より、謎の引き落としを見つける方が現実的な宝探しです。", tags: ["money", "calm"] },
+        { text: "ポイント運あり。失効期限を確認すると、小さな財宝が砂時計から救出されます。", tags: ["money", "air"] },
+        { text: "今日は財布の紐がほどけやすい日。リボンなら可愛いですが、残高には可愛げがありません。", tags: ["money", "love"] },
+        { text: "衝動買いの気配。『未来の自分が喜ぶか』と聞いて、沈黙したら棚に戻しましょう。", tags: ["money", "blood-b"] },
+        { text: "金運は小雨。大金は降りませんが、無駄遣いを一つ避ければ傘になります。", tags: ["money", "water"] },
+        { text: "レシートを見返すと現実がしゃべります。少し口は悪いですが、わりと正論です。", tags: ["money", "earth"] },
+        { text: "今日は見栄の出費に注意。見栄は高級そうに見えて、返品できないアクセサリーです。", tags: ["money", "fire"] },
+        { text: "貯める運はあります。少額でも分けておくと、未来のあなたが小さく拍手します。", tags: ["money", "blood-o"] },
+        { text: "お金の話を避けるほど、数字は廊下で待っています。怖がらずに確認すれば、案外おとなしいです。", tags: ["money", "age-young"] },
+        { text: "金運はふつう。ふつうは偉いです。ドラマがない家計は、かなり優秀な家計です。", tags: ["money", "calm"] },
+        { text: "今日は『安いから買う』より『使うから買う』が吉。順番を間違えると収納が小さな墓地になります。", tags: ["money", "earth"] },
+        { text: "臨時収入の暗示は薄め。その代わり、無駄を減らす魔法は強めです。地味ですが効きます。", tags: ["money", "blood-unknown"] },
+        { text: "投資や大きな買い物は慎重に。水晶玉も今日のチャート画面には少し目を細めています。", tags: ["money", "air"] },
+        { text: "今日は人付き合いの出費に注意。断る勇気は、財布にとっての護符です。", tags: ["money", "water"] },
+        { text: "金運は整えるほど上がります。財布の中の古いレシートは、過去からの紙吹雪です。", tags: ["money", "blood-a"] },
+        { text: "お得な買い物ができる日。ただし『送料無料まであと少し』の罠には、星も苦笑いしています。", tags: ["money", "blood-o"] },
+        { text: "今日は節約が苦になりにくい日。華やかな我慢ではなく、静かな選別が吉です。", tags: ["money", "earth"] },
+        { text: "欲しいものリストを見直すと、本当に欲しいものと深夜のテンションが混ざっているのに気づきます。", tags: ["money", "age-middle"] },
+        { text: "金運はやや回復。なくしたと思った小銭より、忘れていたクーポンの方が今日は強いです。", tags: ["money", "calm"] },
+        { text: "今日は貸し借りを曖昧にしないで。人間関係に小銭の霧が出ると、道に迷います。", tags: ["money", "water"] },
+        { text: "財布に優しくすると、心にも少し余白が戻ります。余白は利息より地味ですが、かなり使えます。", tags: ["money", "calm"] },
+        { text: "金運は冒険より点検。魔法の宝箱を開ける前に、まず固定費という古い鍵を見て。", tags: ["money", "blood-ab"] }
+      ],
+      luckyAction: [
+        { text: "返信する前に一度トイレに行く。それだけで、余計なトラブルを三つ避けられるわ。", tags: ["work", "water"] },
+        { text: "机の上から謎の紙を一枚捨てる。未来のあなたが『誰？助けたの』と言います。", tags: ["work", "earth"] },
+        { text: "飲み物をいつもより丁寧に淹れる。生活に魔法を足すなら、まず湯気からです。", tags: ["calm", "water"] },
+        { text: "スマホの通知を10分だけ黙らせる。運命の声は、通知音よりだいたい小さいです。", tags: ["air", "age-young"] },
+        { text: "靴をそろえる。世界を変えるには小さすぎますが、玄関の顔色は明るくなります。", tags: ["earth", "blood-a"] },
+        { text: "使っていないタブを閉じる。脳内の会議室にも椅子が戻ってきます。", tags: ["work", "air"] },
+        { text: "誰かに短くお礼を言う。長文でなくて大丈夫、感謝は圧縮しても効きます。", tags: ["love", "calm"] },
+        { text: "財布の中のレシートを抜く。過去の買い物の亡霊を成仏させましょう。", tags: ["money", "earth"] },
+        { text: "昼か夕方に空を見る。星が出ていなくても、上を向く練習にはなります。", tags: ["air", "calm"] },
+        { text: "よく使うものを一つだけ磨く。水晶玉でなくても、マグカップで十分です。", tags: ["calm", "blood-o"] },
+        { text: "予定を三つまでに絞る。欲張ると、運命も受付番号を見失います。", tags: ["fire", "work"] },
+        { text: "甘いものを小さく食べる。大きく食べると、それは開運ではなく会議になります。", tags: ["love", "blood-b"] },
+        { text: "一番面倒な用事を5分だけ触る。魔物は触ると意外と小さいことがあります。", tags: ["work", "earth"] },
+        { text: "古いメモを見返す。過去の自分が、たまにまともなことを書いています。", tags: ["age-middle", "air"] },
+        { text: "深呼吸を三回する。安上がりすぎて疑わしいけど、今日は効きます。", tags: ["calm", "water"] },
+        { text: "いつもより早めに充電する。バッテリー残量と心の余裕は、妙に連動します。", tags: ["age-young", "work"] },
+        { text: "玄関か窓辺を少し整える。幸運が来た時に、入る場所が必要です。", tags: ["earth", "calm"] },
+        { text: "気になることを一行だけ書く。悩みは紙に出すと、少しだけ人相が悪くなります。", tags: ["water", "blood-ab"] },
+        { text: "今日だけ『すぐ返信しない権利』を使う。優しさにも営業時間があります。", tags: ["love", "work"] },
+        { text: "帰り道を少しだけ変える。運命はたまに、いつもの道に飽きています。", tags: ["fire", "air"] },
+        { text: "目についたほこりを一か所だけ払う。全部やろうとしないのが今日の美徳です。", tags: ["earth", "blood-a"] },
+        { text: "好きな曲を一曲だけ聴く。今日の心に、安いけれど効くBGMを。", tags: ["love", "calm"] },
+        { text: "『あとで』を一つだけ『今』にする。全部は無理。占い師もそこまで言わないわ。", tags: ["work", "fire"] },
+        { text: "水を一杯飲む。神秘性は薄いけれど、体は意外と素直に喜びます。", tags: ["water", "calm"] },
+        { text: "使わないアプリを一つ消す。小さな別れが、スマホにも魂にも空き容量を作ります。", tags: ["air", "money"] },
+        { text: "寝る前に明日の服だけ決める。朝の自分は、想像よりだいぶ交渉が下手です。", tags: ["age-middle", "earth"] }
+      ],
+      avoidAction: [
+        { text: "『一瞬で終わります』と言うこと。言った瞬間に、地獄のように長くなるわよ。", tags: ["work", "chaos"] },
+        { text: "空腹のまま大事な判断をすること。胃袋が議長になる会議は荒れます。", tags: ["fire", "calm"] },
+        { text: "深夜に高いものをカートへ入れること。月明かりは商品を二割ほど美化します。", tags: ["money", "water"] },
+        { text: "相手の短文返信を法廷資料みたいに分析すること。判決はだいたい『考えすぎ』です。", tags: ["love", "air"] },
+        { text: "全部自分で片づけようとすること。あなたは便利な魔法道具ではありません。", tags: ["work", "blood-a"] },
+        { text: "気分で予定を詰め込むこと。未来のあなたが受付で泣きます。", tags: ["fire", "age-young"] },
+        { text: "通知を見ながら食事すること。味覚と不安を同席させると、どちらも薄まります。", tags: ["water", "calm"] },
+        { text: "『まあ大丈夫』で確認を省くこと。今日の『まあ』は少し信用が薄いです。", tags: ["work", "earth"] },
+        { text: "安さだけで買うこと。安い不要品は、家賃を払わず居座る客です。", tags: ["money", "blood-o"] },
+        { text: "過去の失敗を反芻すること。もう味はしません。噛むなら夕飯を噛んで。", tags: ["age-middle", "calm"] },
+        { text: "曖昧な返事を重ねること。霧が濃くなって、あとで自分も迷います。", tags: ["water", "blood-ab"] },
+        { text: "人の機嫌を全部引き受けること。天気予報士でも全地域は背負いません。", tags: ["love", "work"] },
+        { text: "勢いだけで長文を送ること。熱量が高すぎる文章は、相手のスマホを少し温めます。", tags: ["love", "fire"] },
+        { text: "『今度やる』を三回唱えること。三回目で小さな呪いになります。", tags: ["work", "earth"] },
+        { text: "知らないふりを続けること。未読の現実は、既読を待たずに増えます。", tags: ["work", "blood-unknown"] },
+        { text: "完璧な準備を待つこと。完璧は遅刻癖があります。", tags: ["air", "calm"] },
+        { text: "財布を開いたまま夢を見ること。夢は無料ですが、関連グッズは有料です。", tags: ["money", "fire"] },
+        { text: "自分の疲れを『気のせい』で処理すること。気のせいにも労働基準があります。", tags: ["age-middle", "water"] },
+        { text: "苦手な人のSNSを見に行くこと。自分から心の階段にバナナの皮を置く行為です。", tags: ["love", "chaos"] },
+        { text: "小さな違和感を全部無視すること。今日は違和感が付箋を持って立っています。", tags: ["blood-ab", "water"] },
+        { text: "返信を装飾しすぎること。絵文字より、要件が先に帰宅したがっています。", tags: ["air", "work"] },
+        { text: "謎の自信で説明書を読まないこと。家電と運命は、たまに説明書に本音を書きます。", tags: ["fire", "blood-b"] },
+        { text: "人の話を最後まで聞かずに助言すること。魔法の杖も、振るタイミングを間違えると棒です。", tags: ["love", "work"] },
+        { text: "朝から全部を取り返そうとすること。人生はポイントカードではありません。", tags: ["age-senior", "calm"] },
+        { text: "『限定』という言葉に即反応すること。限定の半分は、心を急がせる小芝居です。", tags: ["money", "air"] },
+        { text: "寝る直前に心配ごとの棚卸しを始めること。夜の脳は、在庫を盛ります。", tags: ["water", "calm"] }
+      ],
+      mysteryAdvice: [
+        { text: "誰かの期待より、自分のごきげんを優先しなさい。あなたはあなたのままで充分めんどくさいのよ。", tags: ["love", "calm"] },
+        { text: "今日の鍵は『半分だけ丁寧』。全部丁寧にやると、魂の残業代が未払いになります。", tags: ["work", "earth"] },
+        { text: "月は満ち欠けしても謝りません。あなたも少し欠けたままで出勤して大丈夫です。", tags: ["water", "calm"] },
+        { text: "心の中の小さな受付係に、休憩札を渡しましょう。全部の来客を通さなくていいわ。", tags: ["work", "age-middle"] },
+        { text: "迷ったら、未来の自分に領収書を切れる方を選びなさい。感情にも経費精算は必要です。", tags: ["money", "air"] },
+        { text: "今日のあなたに必要なのは奇跡ではなく、充電器と少しの沈黙です。", tags: ["age-young", "calm"] },
+        { text: "大きな答えは、だいたい小さな片づけの後ろに隠れています。探す前にどかして。", tags: ["earth", "work"] },
+        { text: "心配は未来から来た客のふりをしますが、身分証を見せません。全員通さないで。", tags: ["water", "blood-ab"] },
+        { text: "自分にだけ厳しい裁判を開くのはやめなさい。裁判長もたまには早退していいの。", tags: ["blood-a", "calm"] },
+        { text: "今日は『雑に始めて、あとで整える』が吉。最初から荘厳な魔法陣を描く必要はありません。", tags: ["fire", "work"] },
+        { text: "あなたの沈黙は負けではありません。たまに、余計なドラマの入場券を破る力があります。", tags: ["air", "calm"] },
+        { text: "選ばなかった道にも花は咲きます。見に行かなくていいだけです。", tags: ["love", "age-senior"] },
+        { text: "小さな違和感をメモしなさい。今日の違和感は、明日の修理説明書です。", tags: ["work", "blood-ab"] },
+        { text: "あなたの元気は公共物ではありません。貸し出しには期限と返却口を作りましょう。", tags: ["water", "work"] },
+        { text: "誰にも見せない努力ほど、あとで静かに利息がつきます。派手な利息ではないけれど。", tags: ["earth", "calm"] },
+        { text: "今日は『大丈夫』を疑い、『無理』を少し信じる日。どちらもあなたを守る言葉です。", tags: ["age-middle", "water"] },
+        { text: "期待しすぎず、捨てすぎず。心の温度は弱火がいちばん焦げません。", tags: ["love", "calm"] },
+        { text: "自分のための予定を、他人の予定の余白に押し込まないこと。あなたも本文です。", tags: ["blood-o", "work"] },
+        { text: "今日の魔法は『確認』です。地味すぎて杖が泣いていますが、効果はあります。", tags: ["work", "blood-a"] },
+        { text: "不安に名前をつけると、少しだけサイズが小さくなります。変な名前でも効きます。", tags: ["water", "blood-unknown"] },
+        { text: "今のあなたは、壊れているのではなく読み込み中です。画面を叩かないで。", tags: ["air", "age-young"] },
+        { text: "人に優しくする前に、自分の椅子があるか確認しなさい。立ったままの親切は長持ちしません。", tags: ["love", "earth"] },
+        { text: "未来はまだ未提出の書類です。今日のところは、下書きに日付だけ入れましょう。", tags: ["work", "calm"] },
+        { text: "笑える余地を残しなさい。深刻さだけで作った城は、掃除がとても大変です。", tags: ["fire", "calm"] },
+        { text: "誰かのペースに巻き込まれたら、心の靴ひもを結び直して。走るかどうかはその後です。", tags: ["air", "blood-b"] },
+        { text: "あなたの直感は今日、古いラジオくらいの音質です。雑音込みで、案外大事なことを言います。", tags: ["blood-ab", "water"] }
+      ],
+      summary: [
+        { text: "今日のあなたは、可もなく不可もなく、でも放っておいても崩れはしないタイプ。がんばりすぎず、サボりすぎず、ほどよく適当がいちばんよ。", tags: ["calm"] },
+        { text: "派手な奇跡は来ないけれど、小さな回避は何度か起きます。今日は勝つ日というより、転ばずに帰る日です。十分えらいわ。", tags: ["earth"] },
+        { text: "面倒ごとは少しあります。でもあなたには、文句を言いながらも越えていく妙な粘りがあります。そこだけは水晶玉も認めています。", tags: ["work"] },
+        { text: "今日は深読みを半分にして、睡眠と水分を一割増やしましょう。神秘的ではないけれど、効くものはだいたい地味です。", tags: ["water"] },
+        { text: "予定通りに進まなくても、今日はそこから拾えるものがあります。落とし物みたいな幸運なので、足元を見て歩いて。", tags: ["air"] },
+        { text: "あなたの運命は少し笑っています。からかわれているようで、実は背中を押されています。たぶん。", tags: ["fire"] },
+        { text: "小さく整えるほど、運気は素直になります。部屋、財布、言葉、どれか一つで十分。全部やると明日が拗ねます。", tags: ["earth", "blood-a"] },
+        { text: "今日は自分の機嫌を雑に扱わないで。誰かのための余裕は、自分のための余白からしか生まれません。", tags: ["love", "water"] },
+        { text: "よくも悪くも、あなたの勘が働きます。勘が叫んだら一度聞き、踊り出したら少し距離を取りましょう。", tags: ["blood-ab", "air"] },
+        { text: "大きな結論を急がないこと。今日は、人生を決めるより洗濯物を畳む方が運気に合っています。", tags: ["calm", "age-middle"] },
+        { text: "今日の救いは、派手ではなく実務的です。予定を減らす、早めに寝る、変な買い物をしない。それで十分、星は拍手しています。", tags: ["money", "work"] },
+        { text: "あなたは思ったより持ちこたえています。持ちこたえるだけの日も、占い館では立派な吉です。", tags: ["calm", "blood-unknown"] },
+        { text: "人間関係は、正解より温度が大事な日。熱湯でも氷水でもなく、ぬるめのお茶くらいでいきましょう。", tags: ["love", "water"] },
+        { text: "今日は力技より微調整。ネジを半回転だけ戻すような選択が、明日のあなたを救います。", tags: ["work", "earth"] },
+        { text: "うまくいったら珍しく星のおかげ、うまくいかなかったら今日は星が研修中だったと思って。どちらにせよ、あなたは続けられます。", tags: ["fire", "chaos"] },
+        { text: "焦りは出ますが、焦りの声は少し大げさです。実際の敵は、だいたい一つずつ片づけられるサイズです。", tags: ["work", "calm"] },
+        { text: "今日のあなたには、静かな強さがあります。誰にも見せびらかさなくていいので、自分だけは見逃さないで。", tags: ["age-senior", "calm"] },
+        { text: "結論、今日は悪くありません。最高ではないけれど、最高じゃない日を扱える人はかなり強いです。", tags: ["calm"] },
+        { text: "余計なものを一つ減らせば、運気は少し呼吸します。予定でも物でも思い込みでも、手放すなら軽いものから。", tags: ["air", "money"] },
+        { text: "今日は期待値を少し下げると、幸福度が上がります。小さな勝ちを拾うのが上手な人から、夜がやさしくなります。", tags: ["earth", "calm"] },
+        { text: "あなたの一日は、完璧な物語ではなく、少し修正跡のある下書きです。でも下書きには、まだ直せるという希望があります。", tags: ["air", "age-young"] },
+        { text: "嫌な予感がしたら、逃げ道を作ってから進みましょう。勇気とは、退路を知っている賢さでもあります。", tags: ["water", "blood-a"] },
+        { text: "今日は笑って済ませられることを、無理に重大事件にしないこと。人生の議題は、放っておくと増えます。", tags: ["love", "calm"] },
+        { text: "小さな面倒があなたを鍛えます。ありがたくはないけれど、あとで少しだけ役に立つタイプの面倒です。", tags: ["work", "earth"] },
+        { text: "水晶玉の結論はこうです。無理に輝かなくていい。今日は曇りガラス越しの光くらいで、ちゃんと足ります。", tags: ["water", "calm"] },
+        { text: "今日は『だいたいできた』を合格にしましょう。満点を狙うと、採点者のあなたが一番怖いです。", tags: ["blood-a", "work"] }
+      ]
+    };
+
+    const SCORE_NOTES = [
+      { min: 90, label: "大吉", note: "今日は珍しく追い風ね。油断すると追い風で書類が飛ぶけど。" },
+      { min: 76, label: "中吉", note: "かなり良いわ。調子に乗るなら、靴ひもだけは結んで。" },
+      { min: 61, label: "小吉", note: "ほどほどね。油断しなければ、なんとかなるわ。" },
+      { min: 46, label: "末吉", note: "渋いけど使える日。古いクーポンみたいな運勢よ。" },
+      { min: 31, label: "黒吉", note: "毒気はあるけど、全部が敵ではないわ。避ける技術が光る日。" },
+      { min: 1, label: "虚無吉", note: "大丈夫。底が見えたということは、あとは床材を選ぶだけよ。" }
+    ];
+
+    const ZODIAC_GROUPS = {
+      "牡羊座": "fire", "獅子座": "fire", "射手座": "fire",
+      "牡牛座": "earth", "乙女座": "earth", "山羊座": "earth",
+      "双子座": "air", "天秤座": "air", "水瓶座": "air",
+      "蟹座": "water", "蠍座": "water", "魚座": "water"
+    };
+
+    const CATEGORY_META = [
+      { key: "overall", title: "総合運", icon: "🔮" },
+      { key: "work", title: "仕事運", icon: "💻" },
+      { key: "love", title: "恋愛運", icon: "💗" },
+      { key: "money", title: "金運", icon: "👛" }
+    ];
+
+    const ACTION_META = [
+      { key: "luckyAction", title: "今日のラッキー行動", icon: "🍀" },
+      { key: "avoidAction", title: "今日のやめておけ行動", icon: "☠️" },
+      { key: "mysteryAdvice", title: "今日の謎アドバイス", icon: "🃏" }
+    ];
+
+    const form = document.getElementById("fortuneForm");
+    const errorMessage = document.getElementById("errorMessage");
+    const stage = document.getElementById("stage");
+    const speech = document.getElementById("speech");
+    const statusBadge = document.getElementById("statusBadge");
+    const results = document.getElementById("results");
+    const mainCards = document.getElementById("mainCards");
+    const actionCards = document.getElementById("actionCards");
+    const summaryText = document.getElementById("summaryText");
+    const scoreValue = document.getElementById("scoreValue");
+    const scoreLabel = document.getElementById("scoreLabel");
+    const scoreNote = document.getElementById("scoreNote");
+    const againButton = document.getElementById("againButton");
+    const sparkles = document.getElementById("sparkles");
+
+    let lastResults = null;
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const profile = readProfile();
+      if (!profile) return;
+      runFortune(profile);
+    });
+
+    againButton.addEventListener("click", () => {
+      const profile = readProfile();
+      if (!profile) return;
+      runFortune(profile);
+    });
+
+    function readProfile() {
+      const formData = new FormData(form);
+      const age = Number(formData.get("age"));
+      const zodiac = String(formData.get("zodiac") || "");
+
+      if (!Number.isInteger(age) || age < 1 || age > 120) {
+        showError("年齢は1〜120の数字で入れてね。水晶玉も限界はあるの。");
+        document.getElementById("age").focus();
+        return null;
+      }
+
+      if (!zodiac) {
+        showError("星座を選んでね。星が出勤できないわ。");
+        document.getElementById("zodiac").focus();
+        return null;
+      }
+
+      showError("");
+      return {
+        age,
+        gender: String(formData.get("gender") || "秘密"),
+        zodiac,
+        blood: String(formData.get("blood") || "不明"),
+        ageTag: getAgeTag(age),
+        elementTag: ZODIAC_GROUPS[zodiac] || "calm",
+        bloodTag: getBloodTag(String(formData.get("blood") || "不明"))
+      };
+    }
+
+    function showError(message) {
+      errorMessage.textContent = message;
+    }
+
+    function getAgeTag(age) {
+      if (age <= 29) return "age-young";
+      if (age <= 54) return "age-middle";
+      return "age-senior";
+    }
+
+    function getBloodTag(blood) {
+      return {
+        A: "blood-a",
+        B: "blood-b",
+        O: "blood-o",
+        AB: "blood-ab",
+        "不明": "blood-unknown"
+      }[blood] || "blood-unknown";
+    }
+
+    function runFortune(profile) {
+      stage.classList.add("is-reading");
+      speech.textContent = NOCTURNE.lines.reading;
+      statusBadge.textContent = "解析中…";
+      createSparkles(30);
+
+      window.setTimeout(() => {
+        const fortune = generateFortune(profile);
+        renderFortune(fortune);
+        stage.classList.remove("is-reading");
+        statusBadge.textContent = fortune.scoreLabel;
+        speech.textContent = fortune.score >= 76 ? NOCTURNE.lines.good : fortune.score <= 35 ? NOCTURNE.lines.bad : NOCTURNE.lines.result;
+        createSparkles(48);
+        results.hidden = false;
+        results.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 650);
+    }
+
+    /* =========================================================
+       生成ロジック
+       入力内容のタグに合う文章が少し出やすくなる軽い重み付け。
+       同じ人が同じ日に何度押しても変わるよう、完全固定にはしません。
+       ========================================================= */
+    function generateFortune(profile) {
+      const selected = {};
+      const usedTexts = new Set();
+
+      [...CATEGORY_META, ...ACTION_META, { key: "summary" }].forEach((category) => {
+        selected[category.key] = pickWeightedPart(category.key, profile, usedTexts).text;
+      });
+
+      const score = calculateScore(profile);
+      const scoreInfo = SCORE_NOTES.find((item) => score >= item.min);
+
+      lastResults = {
+        profile,
+        score,
+        scoreLabel: scoreInfo.label,
+        scoreNote: scoreInfo.note,
+        texts: selected
+      };
+
+      return lastResults;
+    }
+
+    function pickWeightedPart(categoryKey, profile, usedTexts) {
+      const parts = FORTUNE_PARTS[categoryKey];
+      const weighted = [];
+      const contextTags = [
+        profile.ageTag,
+        profile.elementTag,
+        profile.bloodTag,
+        "calm"
+      ];
+
+      parts.forEach((part) => {
+        let weight = 1;
+        contextTags.forEach((tag) => {
+          if (part.tags.includes(tag)) weight += 2;
+        });
+        if (usedTexts.has(part.text)) weight = Math.max(1, weight - 4);
+        for (let index = 0; index < weight; index += 1) weighted.push(part);
+      });
+
+      const chosen = weighted[Math.floor(Math.random() * weighted.length)] || parts[0];
+      usedTexts.add(chosen.text);
+      return chosen;
+    }
+
+    function calculateScore(profile) {
+      const base = Math.floor(Math.random() * 65) + 18;
+      const zodiacBonus = profile.elementTag === "fire" ? 7 : profile.elementTag === "earth" ? 4 : profile.elementTag === "air" ? 5 : 3;
+      const ageNoise = profile.ageTag === "age-young" ? randomBetween(-7, 10) : profile.ageTag === "age-middle" ? randomBetween(-5, 8) : randomBetween(-4, 9);
+      const bloodNoise = {
+        "blood-a": randomBetween(-3, 7),
+        "blood-b": randomBetween(-6, 9),
+        "blood-o": randomBetween(-4, 8),
+        "blood-ab": randomBetween(-7, 10),
+        "blood-unknown": randomBetween(-2, 6)
+      }[profile.bloodTag] || 0;
+
+      return clamp(base + zodiacBonus + ageNoise + bloodNoise, 1, 100);
+    }
+
+    function randomBetween(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    /* =========================================================
+       UI描画
+       結果カードやスコア表示をここで更新します。
+       ========================================================= */
+    function renderFortune(fortune) {
+      scoreValue.textContent = fortune.score;
+      scoreLabel.textContent = fortune.scoreLabel;
+      scoreNote.textContent = fortune.scoreNote;
+
+      mainCards.innerHTML = CATEGORY_META.map((meta) => {
+        const stars = renderStars(fortune.score, meta.key);
+        return `
+          <article class="fortune-card">
+            <h3><span class="card-icon">${meta.icon}</span>${meta.title}</h3>
+            <p>${escapeHtml(fortune.texts[meta.key])}</p>
+            <div class="luck-stars" aria-label="ラッキー度">${stars}</div>
+          </article>
+        `;
+      }).join("");
+
+      actionCards.innerHTML = ACTION_META.map((meta) => `
+        <article class="fortune-card">
+          <h3><span class="card-icon">${meta.icon}</span>${meta.title}</h3>
+          <p>${escapeHtml(fortune.texts[meta.key])}</p>
+        </article>
+      `).join("");
+
+      summaryText.textContent = fortune.texts.summary;
+    }
+
+    function renderStars(score, key) {
+      const offsets = { overall: 0, work: -8, love: 4, money: -3 };
+      const starCount = clamp(Math.ceil((score + (offsets[key] || 0)) / 20), 1, 5);
+      return Array.from({ length: 5 }, (_, index) => {
+        const className = index < starCount ? "" : " class=\"dim\"";
+        return `<span${className}>★</span>`;
+      }).join("");
+    }
+
+    function createSparkles(count) {
+      for (let index = 0; index < count; index += 1) {
+        const spark = document.createElement("span");
+        spark.className = "spark";
+        spark.textContent = Math.random() > 0.55 ? "✦" : "✧";
+        spark.style.left = `${randomBetween(8, 92)}vw`;
+        spark.style.top = `${randomBetween(18, 82)}vh`;
+        spark.style.animationDelay = `${Math.random() * 260}ms`;
+        spark.style.fontSize = `${randomBetween(12, 26)}px`;
+        sparkles.appendChild(spark);
+        window.setTimeout(() => spark.remove(), 1200);
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+  </script>
+</body>
+</html>
