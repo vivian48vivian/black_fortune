@@ -690,9 +690,11 @@
       }
 
       .hero-visual {
-        right: 50%;
-        width: min(500px, 92%);
-        transform: translateX(50%);
+        left: 50%;
+        right: auto;
+        width: min(500px, 94%);
+        animation: none;
+        transform: translateX(-50%);
       }
 
       .speech {
@@ -738,11 +740,15 @@
       }
 
       .hero-visual {
-        width: min(440px, 96%);
+        left: 50%;
+        right: auto;
+        width: min(480px, 100%);
+        transform: translateX(-50%);
       }
 
       .fortune-image {
         max-height: 500px;
+        margin-inline: auto;
       }
 
       .status-badge {
@@ -873,7 +879,7 @@
         <div class="hero-visual" aria-hidden="true">
           <img class="fortune-image" src="assets/fortune-girl.png" alt="">
         </div>
-        <div class="status-badge" id="statusBadge" aria-hidden="true">占い中…</div>
+        <div class="status-badge" id="statusBadge" aria-hidden="true">占い受付中♡</div>
         <div class="shelf" aria-hidden="true"></div>
       </section>
     </section>
